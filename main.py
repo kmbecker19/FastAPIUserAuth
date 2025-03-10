@@ -66,6 +66,19 @@ def create_user(user: UserCreate, session: SessionDep):
 def read_users_me(current_user: UserDep):
     return current_user
 
+@app.patch('/users/me', response_model=UserPublic)
+def update_users_me(session: SessionDep,
+                    current_user: UserDep,
+                    user_update: UserUpdate):
+    if not current_user:
+        raise HTTPException(status_code=404, detail='User not found')
+    update_data = user_update.model_dump(exclude_unset=True)
+    current_user.sqlmodel_update(update_data)
+    session.add(current_user)
+    session.commit()
+    session.refresh(current_user)
+    return current_user
+
 @app.get('/users', response_model=list[User])
 def read_users(session: SessionDep,
                offset: int = 0,
