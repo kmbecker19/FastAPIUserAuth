@@ -13,13 +13,13 @@ class UserPublic(UserBase):
     username: str
 
 class UserCreate(UserBase):
-    hashed_password: str
+    password: str
 
 class UserUpdate(UserBase):
     username: str | None = None
     email: str | None = None
     full_name: str | None = None
-    hashed_password: str | None = None
+    password: str | None = None
 
 class Token(SQLModel):
     access_token: str = Field(primary_key=True)

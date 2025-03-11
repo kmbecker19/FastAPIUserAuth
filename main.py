@@ -43,14 +43,14 @@ def get_session():
         yield session
 
 # Password setup
-pwd_context = CryptContext(scemes=['bcrypt'], deprecated='auto')
+pwd_context = CryptContext(schemes=['bcrypt'], deprecated='auto')
 oath2_scheme = OAuth2PasswordBearer(tokenUrl='token')
 
 SessionDep = Annotated[Session, Depends(get_session)]
 
 TokenDep = Annotated[str, Depends(oath2_scheme)]
 
-async def get_current_user(token: TokenDep, session: SessionDep) -> User:
+def get_current_user(token: TokenDep, session: SessionDep) -> User:
     
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
@@ -94,7 +94,7 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None):
 
 
 @app.post('/token')
-async def login(form_data: FormDep, session: SessionDep) -> Token:
+def login(form_data: FormDep, session: SessionDep) -> Token:
     user = authenticate_user(session, form_data.username, form_data.password)
     if not user:
         raise AUTH_EXCEPTION
@@ -103,11 +103,26 @@ async def login(form_data: FormDep, session: SessionDep) -> Token:
         data={'sub': user.username}, expires_delta=access_token_expires
     )
     return Token(access_token=access_token, token_type='bearer')
-    
+
+@app.post('/users/new', response_model=UserPublic)
+def create_new_user(form_data: FormDep, session: SessionDep):
+    user = User(
+        username = form_data.username,
+        email = f'{form_data.username}@example.com',
+        full_name = form_data.username,
+        hashed_password = get_password_hash(form_data.password)
+    )
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    return user
+
 # Routes
 @app.post('/users', response_model=UserPublic)
 def create_user(user: UserCreate, session: SessionDep):
+    hashed_password = get_password_hash(user.password)
     user_db = User.model_validate(user)
+    user_db.hashed_password = hashed_password
     session.add(user_db)
     session.commit()
     session.refresh(user_db)
