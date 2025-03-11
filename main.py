@@ -9,7 +9,7 @@ from passlib.context import CryptContext
 import jwt
 from jwt.exceptions import InvalidTokenError
 
-from models import User, UserPublic, UserUpdate, UserCreate
+from models import User, UserPublic, UserUpdate, UserCreate, Token, TokenData
 
 # Password Key stuff
 SECRET_KEY = '50de480a4ce9ce7a66e2da0ab029f77bccb4a397d189a80257b2b87762efafc8'
@@ -45,14 +45,24 @@ SessionDep = Annotated[Session, Depends(get_session)]
 TokenDep = Annotated[str, Depends(oath2_scheme)]
 
 async def get_current_user(token: TokenDep, session: SessionDep) -> User:
-    user = session.get(User, token)
-    if not user:
-        raise HTTPException(
+    auth_exception = HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid auth credentials",
             headers={"WWW-Authenticate": "Bearer"}
-        )
+    )
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username = payload.get('sub')
+        if username is None:
+            raise auth_exception
+        token_data = TokenData(username=username)
+    except InvalidTokenError:
+        raise auth_exception
+    user = session.get(User, token_data.username)
+    if user is None:
+        raise auth_exception
     return user
+
 
 UserDep = Annotated[User, Depends(get_current_user)]
 FormDep = Annotated[OAuth2PasswordRequestForm, Depends()]
