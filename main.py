@@ -4,8 +4,14 @@ from contextlib import asynccontextmanager
 from sqlmodel import create_engine, Session, SQLModel, select
 from fastapi import FastAPI, HTTPException, Depends, Query, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from passlib.context import CryptContext
 
 from models import User, UserPublic, UserUpdate, UserCreate
+
+# Password Key stuff
+SECRET_KEY = '50de480a4ce9ce7a66e2da0ab029f77bccb4a397d189a80257b2b87762efafc8'
+ALGORITHM = 'HS256'
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 # Set up SQL Engine
 db_path = Path().absolute() / 'database.db'
@@ -27,6 +33,8 @@ def get_session():
     with Session(engine) as session:
         yield session
 
+# Password setup
+pwd_context = CryptContext(scemes=['bcrypt'], deprecated='auto')
 oath2_scheme = OAuth2PasswordBearer(tokenUrl='token')
 
 SessionDep = Annotated[Session, Depends(get_session)]
@@ -45,6 +53,19 @@ async def get_current_user(token: TokenDep, session: SessionDep) -> User:
 
 UserDep = Annotated[User, Depends(get_current_user)]
 FormDep = Annotated[OAuth2PasswordRequestForm, Depends()]
+
+# Password verification
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    return pwd_context.verify(plain_password, hashed_password)
+
+def get_password_hash(password: str) -> str:
+    return pwd_context.hash(password)
+
+def authenticate_user(session: SessionDep, username: str, password: str) -> User | bool:
+    user = session.get(User, username)
+    if not user or not verify_password(password, user.hashed_password):
+        return False
+    return user
 
 @app.post('/token')
 async def login(form_data: FormDep, session: SessionDep):
