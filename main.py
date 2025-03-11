@@ -3,13 +3,13 @@ from typing import Annotated
 from datetime import datetime, timedelta, timezone
 from contextlib import asynccontextmanager
 from sqlmodel import create_engine, Session, SQLModel, select
-from fastapi import FastAPI, HTTPException, Depends, Query, status
+from fastapi import FastAPI, HTTPException, Depends, Query, status, Form
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from passlib.context import CryptContext
 import jwt
 from jwt.exceptions import InvalidTokenError
 
-from models import User, UserPublic, UserUpdate, UserCreate, Token, TokenData
+from models import User, UserPublic, UserUpdate, UserCreate, Token, TokenData, CreateUserForm
 
 AUTH_EXCEPTION = HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -105,11 +105,11 @@ def login(form_data: FormDep, session: SessionDep) -> Token:
     return Token(access_token=access_token, token_type='bearer')
 
 @app.post('/users/new', response_model=UserPublic)
-def create_new_user(form_data: FormDep, session: SessionDep):
+def create_new_user(form_data: Annotated[CreateUserForm, Form()], session: SessionDep):
     user = User(
         username = form_data.username,
-        email = f'{form_data.username}@example.com',
-        full_name = form_data.username,
+        email = form_data.email,
+        full_name = form_data.full_name,
         hashed_password = get_password_hash(form_data.password)
     )
     session.add(user)
@@ -118,16 +118,6 @@ def create_new_user(form_data: FormDep, session: SessionDep):
     return user
 
 # Routes
-@app.post('/users', response_model=UserPublic)
-def create_user(user: UserCreate, session: SessionDep):
-    hashed_password = get_password_hash(user.password)
-    user_db = User.model_validate(user)
-    user_db.hashed_password = hashed_password
-    session.add(user_db)
-    session.commit()
-    session.refresh(user_db)
-    return user_db
-
 @app.get('/users/me', response_model=UserPublic)
 def read_users_me(current_user: UserDep):
     return current_user

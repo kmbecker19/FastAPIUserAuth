@@ -27,3 +27,10 @@ class Token(SQLModel):
 
 class TokenData(SQLModel):
     username: str | None = None
+
+class CreateUserForm(SQLModel):
+    username: str
+    password: str
+    email: str
+    full_name: str
+    model_config = {'extra': 'forbid'}
