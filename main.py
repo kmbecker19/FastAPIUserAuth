@@ -1,10 +1,13 @@
 from pathlib import Path
 from typing import Annotated
+from datetime import datetime, timedelta, timezone
 from contextlib import asynccontextmanager
 from sqlmodel import create_engine, Session, SQLModel, select
 from fastapi import FastAPI, HTTPException, Depends, Query, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from passlib.context import CryptContext
+import jwt
+from jwt.exceptions import InvalidTokenError
 
 from models import User, UserPublic, UserUpdate, UserCreate
 
@@ -66,6 +69,17 @@ def authenticate_user(session: SessionDep, username: str, password: str) -> User
     if not user or not verify_password(password, user.hashed_password):
         return False
     return user
+
+# Access token creation
+def create_access_token(data: dict, expires_delta: timedelta | None = None):
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.now(timezone.utc) + expires_delta
+    else:
+        expires_delta = datetime.now(timezone.utc) + timedelta(minutes=30)
+    to_encode.update({'exp': expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
 
 @app.post('/token')
 async def login(form_data: FormDep, session: SessionDep):

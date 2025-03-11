@@ -20,3 +20,10 @@ class UserUpdate(UserBase):
     email: str | None = None
     full_name: str | None = None
     hashed_password: str | None = None
+
+class Token(SQLModel):
+    access_token: str = Field(primary_key=True)
+    token_type: str = Field(index=True)
+
+class TokenData(SQLModel):
+    username: str | None = None
