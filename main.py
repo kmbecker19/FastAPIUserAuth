@@ -11,6 +11,12 @@ from jwt.exceptions import InvalidTokenError
 
 from models import User, UserPublic, UserUpdate, UserCreate, Token, TokenData
 
+AUTH_EXCEPTION = HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid auth credentials",
+            headers={"WWW-Authenticate": "Bearer"}
+    )
+
 # Password Key stuff
 SECRET_KEY = '50de480a4ce9ce7a66e2da0ab029f77bccb4a397d189a80257b2b87762efafc8'
 ALGORITHM = 'HS256'
@@ -45,24 +51,19 @@ SessionDep = Annotated[Session, Depends(get_session)]
 TokenDep = Annotated[str, Depends(oath2_scheme)]
 
 async def get_current_user(token: TokenDep, session: SessionDep) -> User:
-    auth_exception = HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid auth credentials",
-            headers={"WWW-Authenticate": "Bearer"}
-    )
+    
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username = payload.get('sub')
         if username is None:
-            raise auth_exception
+            raise AUTH_EXCEPTION
         token_data = TokenData(username=username)
     except InvalidTokenError:
-        raise auth_exception
+        raise AUTH_EXCEPTION
     user = session.get(User, token_data.username)
     if user is None:
-        raise auth_exception
+        raise AUTH_EXCEPTION
     return user
-
 
 UserDep = Annotated[User, Depends(get_current_user)]
 FormDep = Annotated[OAuth2PasswordRequestForm, Depends()]
@@ -91,12 +92,17 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None):
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
+
 @app.post('/token')
-async def login(form_data: FormDep, session: SessionDep):
-    user = session.get(User, form_data.username)
-    if not user or not user.hashed_password == form_data.password:
-        raise HTTPException(status_code=400, detail='Invalid username or password')
-    return {'access_token': user.username, 'token_type': 'bearer'}
+async def login(form_data: FormDep, session: SessionDep) -> Token:
+    user = authenticate_user(session, form_data.username, form_data.password)
+    if not user:
+        raise AUTH_EXCEPTION
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={'sub': user.username}, expires_delta=access_token_expires
+    )
+    return Token(access_token=access_token, token_type='bearer')
     
 # Routes
 @app.post('/users', response_model=UserPublic)
